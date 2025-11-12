@@ -4,16 +4,20 @@ A flexible and extensible Business Process Management (BPM) engine for .NET with
 
 ## Features
 
-- ✅ **Multiple Step Types**:
-  - **Interaction Steps** - Wait for user input before continuing
-  - **Scheduled Steps** - Wait until a specific date/time
-  - **Activity Steps** - Execute business logic via registered services
-  - **Gateway Steps** - Conditional routing and decision logic
+- ✅ **Five Step Types**:
+  - **InteractionStep** - Wait for external user input (integrates with your task system)
+  - **ScheduledStep** - Wait until specific date/time
+  - **BusinessStep** - Execute business logic via registered services
+  - **DecisionStep** - Conditional or service-based routing
+  - **SubWorkflowStep** - Execute nested workflows for reusability
 
+- ✅ **External Task System Integration** - Seamlessly integrates with your existing task management system
+- ✅ **Service-Based Decisions** - Decision steps can query services/databases for dynamic routing
 - ✅ **Oracle Database Support** with customizable table names
-- ✅ **JSON-based Workflow Definitions**
+- ✅ **JSON-based Workflow Definitions** - Easy to create and version control
+- ✅ **Workflow Visualization Tool** - Generate diagrams (HTML, Mermaid, Text)
 - ✅ **Expression Evaluation** for conditions and routing
-- ✅ **Retry Logic** for activity steps
+- ✅ **Retry Logic** for business steps
 - ✅ **Workflow Correlation** for tracking related processes
 - ✅ **Extensible Architecture** - Easy to add custom step types
 
@@ -65,11 +69,15 @@ services.AddScoped<IStepInstanceRepository, OracleStepInstanceRepository>();
 services.AddSingleton<IActivityServiceRegistry, ActivityServiceRegistry>();
 services.AddSingleton<IExpressionEvaluator, ExpressionEvaluator>();
 
+// Register external task system (OPTIONAL - only if integrating with existing task system)
+services.AddSingleton<IExternalTaskSystem, YourTaskSystem>();  // Implement IExternalTaskSystem
+
 // Register step executors
 services.AddScoped<IStepExecutor, InteractionStepExecutor>();
 services.AddScoped<IStepExecutor, ScheduledStepExecutor>();
-services.AddScoped<IStepExecutor, ActivityStepExecutor>();
-services.AddScoped<IStepExecutor, GatewayStepExecutor>();
+services.AddScoped<IStepExecutor, BusinessStepExecutor>();  // Updated name
+services.AddScoped<IStepExecutor, DecisionStepExecutor>();  // Updated name
+services.AddScoped<IStepExecutor, SubWorkflowStepExecutor>();  // New!
 
 // Register workflow engine
 services.AddScoped<IWorkflowEngine, WorkflowEngine.Core.Services.WorkflowEngine>();
@@ -80,7 +88,36 @@ services.AddScoped<WorkflowDefinitionLoader>();
 var serviceProvider = services.BuildServiceProvider();
 ```
 
-### 3. Load and Deploy a Workflow Definition
+### 3. Integrate with Your Task System (Optional)
+
+If you have an existing task management system, implement the integration interface:
+
+```csharp
+public class YourTaskSystem : IExternalTaskSystem
+{
+    public async Task<string> CreateTaskAsync(ExternalTaskInfo taskInfo)
+    {
+        // Call YOUR task system API to create a task
+        var response = await _http.PostAsJsonAsync("your-api/tasks", new {
+            title = taskInfo.Title,
+            workflowContext = taskInfo.WorkflowContext
+        });
+        return response.TaskId;  // Return YOUR system's task ID
+    }
+
+    public async Task CloseTaskAsync(string externalTaskId, Dictionary<string, object> data)
+    {
+        // Call YOUR task system API to close the task
+        await _http.PutAsJsonAsync($"your-api/tasks/{externalTaskId}/complete", data);
+    }
+    
+    // Implement UpdateTaskAsync and CancelTaskAsync...
+}
+```
+
+See **EXTERNAL_TASK_INTEGRATION.md** for complete integration guide.
+
+### 4. Load and Deploy a Workflow Definition
 
 ```csharp
 // Load from JSON file

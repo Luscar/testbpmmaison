@@ -99,14 +99,15 @@ Demonstrates:
 - Interaction step completion
 - Status monitoring
 
-## Step Types (Renamed for Clarity)
+## Step Types (Current Names)
 
-| Original Name | New Name | Purpose |
-|--------------|----------|---------|
-| UserStep | **InteractionStep** | Wait for user/external input |
-| DelayStep | **ScheduledStep** | Wait until specific date/time |
-| BusinessStep | **ActivityStep** | Execute business logic |
-| DecisionStep | **GatewayStep** | Conditional routing |
+| Step Type | Purpose | JSON Type |
+|-----------|---------|-----------|
+| InteractionStep | Wait for user/external input | `"interaction"` |
+| ScheduledStep | Wait until specific date/time | `"scheduled"` |
+| **BusinessStep** | Execute business logic | `"business"` |
+| **DecisionStep** | Conditional/service routing | `"decision"` |
+| **SubWorkflowStep** | Execute nested workflow | `"subworkflow"` |
 
 ## Getting Started
 

@@ -4,15 +4,19 @@
 
 A complete, production-ready BPM (Business Process Management) engine for C# with:
 
-✅ **4 Step Types** (renamed for clarity):
-- **InteractionStep** (was UserStep) - Wait for user input
-- **ScheduledStep** (was DelayStep) - Wait until a specific date
-- **ActivityStep** (was BusinessStep) - Execute business logic  
-- **GatewayStep** (was DecisionStep) - Route based on conditions
+✅ **5 Step Types**:
+- **InteractionStep** - Wait for user input (integrates with your task system)
+- **ScheduledStep** - Wait until a specific date/time
+- **BusinessStep** - Execute business logic via services
+- **DecisionStep** - Conditional or service-based routing
+- **SubWorkflowStep** - Execute nested workflows
 
-✅ **Oracle Database Support** with customizable table names
-✅ **JSON Workflow Definitions** - Define processes in JSON
-✅ **Expression Engine** - Powerful condition evaluation
+✅ **External Task System Integration** - Works with your existing task system  
+✅ **Service-Based Decisions** - Query databases/APIs for routing  
+✅ **Workflow Visualization** - Generate diagrams (HTML, Mermaid, Text)  
+✅ **Oracle Database Support** with customizable table names  
+✅ **JSON Workflow Definitions** - Define processes in JSON  
+✅ **Expression Engine** - Powerful condition evaluation  
 ✅ **Complete Example Application**
 
 ## 5-Minute Quick Start
@@ -50,11 +54,15 @@ services.AddScoped<IStepInstanceRepository, OracleStepInstanceRepository>();
 services.AddSingleton<IActivityServiceRegistry, ActivityServiceRegistry>();
 services.AddSingleton<IExpressionEvaluator, ExpressionEvaluator>();
 
+// External Task System (Optional - only if integrating with existing task system)
+services.AddSingleton<IExternalTaskSystem, YourTaskSystem>();
+
 // Step Executors
 services.AddScoped<IStepExecutor, InteractionStepExecutor>();
 services.AddScoped<IStepExecutor, ScheduledStepExecutor>();
-services.AddScoped<IStepExecutor, ActivityStepExecutor>();
-services.AddScoped<IStepExecutor, GatewayStepExecutor>();
+services.AddScoped<IStepExecutor, BusinessStepExecutor>();  // Updated
+services.AddScoped<IStepExecutor, DecisionStepExecutor>();  // Updated
+services.AddScoped<IStepExecutor, SubWorkflowStepExecutor>();  // New!
 
 // Engine
 services.AddScoped<IWorkflowEngine, WorkflowEngine.Core.Services.WorkflowEngine>();
