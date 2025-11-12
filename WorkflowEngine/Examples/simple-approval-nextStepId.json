@@ -1,0 +1,105 @@
+{
+  "id": "simple-approval-v2",
+  "name": "Simple Approval Process (Simplified)",
+  "description": "Demonstrates using nextStepId for linear flows instead of transitions",
+  "version": "2.0.0",
+  "initialStepId": "submit-request",
+  "variables": {
+    "requestorName": "",
+    "requestorEmail": "",
+    "requestType": "",
+    "amount": 0,
+    "approved": false,
+    "approverComments": ""
+  },
+  "steps": [
+    {
+      "id": "submit-request",
+      "name": "Submit Request",
+      "type": "interaction",
+      "nextStepId": "validate-request",
+      "configuration": {
+        "formSchema": "{\"type\":\"object\",\"properties\":{\"requestorName\":{\"type\":\"string\"},\"requestorEmail\":{\"type\":\"string\"},\"requestType\":{\"type\":\"string\"},\"amount\":{\"type\":\"number\"}}}",
+        "assignedRoles": ["Employee"],
+        "timeoutMinutes": 1440
+      }
+    },
+    {
+      "id": "validate-request",
+      "name": "Validate Request Data",
+      "type": "activity",
+      "nextStepId": "route-by-amount",
+      "configuration": {
+        "serviceName": "ValidationService",
+        "methodName": "ValidateRequest",
+        "inputMapping": {
+          "amount": "$amount",
+          "requestType": "$requestType"
+        },
+        "outputMapping": {
+          "valid": "requestValid"
+        },
+        "retryCount": 2
+      }
+    },
+    {
+      "id": "route-by-amount",
+      "name": "Route Based on Amount",
+      "type": "gateway",
+      "configuration": {
+        "gatewayType": "exclusive",
+        "defaultTransitionId": "standard-approval"
+      },
+      "transitions": [
+        {
+          "id": "standard-approval",
+          "targetStepId": "manager-approval",
+          "condition": "amount <= 5000",
+          "label": "Standard Approval"
+        },
+        {
+          "id": "executive-approval",
+          "targetStepId": "executive-approval-step",
+          "condition": "amount > 5000",
+          "label": "Executive Approval Required"
+        }
+      ]
+    },
+    {
+      "id": "manager-approval",
+      "name": "Manager Approval",
+      "type": "interaction",
+      "nextStepId": "send-notification",
+      "configuration": {
+        "formSchema": "{\"type\":\"object\",\"properties\":{\"approved\":{\"type\":\"boolean\"},\"approverComments\":{\"type\":\"string\"}}}",
+        "assignedRoles": ["Manager"],
+        "timeoutMinutes": 2880
+      }
+    },
+    {
+      "id": "executive-approval-step",
+      "name": "Executive Approval",
+      "type": "interaction",
+      "nextStepId": "send-notification",
+      "configuration": {
+        "formSchema": "{\"type\":\"object\",\"properties\":{\"approved\":{\"type\":\"boolean\"},\"approverComments\":{\"type\":\"string\"}}}",
+        "assignedRoles": ["Executive", "Director"],
+        "timeoutMinutes": 2880
+      }
+    },
+    {
+      "id": "send-notification",
+      "name": "Send Notification Email",
+      "type": "activity",
+      "configuration": {
+        "serviceName": "EmailService",
+        "methodName": "SendApprovalNotification",
+        "inputMapping": {
+          "to": "$requestorEmail",
+          "approved": "$approved",
+          "comments": "$approverComments"
+        }
+      }
+    }
+  ]
+}

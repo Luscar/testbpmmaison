@@ -1,0 +1,134 @@
+{
+  "id": "purchase-approval-v3",
+  "name": "Purchase Approval Process",
+  "description": "Simple workflow that delegates all assignment to external task system",
+  "version": "3.0.0",
+  "initialStepId": "validate-request",
+  "variables": {
+    "requestId": "",
+    "amount": 0,
+    "category": "",
+    "approved": false
+  },
+  "steps": [
+    {
+      "id": "validate-request",
+      "name": "Validate Purchase Request",
+      "type": "business",
+      "nextStepId": "manager-approval",
+      "configuration": {
+        "serviceName": "PurchaseService",
+        "methodName": "ValidateRequest",
+        "inputMapping": {
+          "requestId": "$requestId",
+          "amount": "$amount"
+        }
+      }
+    },
+    {
+      "id": "manager-approval",
+      "name": "Manager Approval",
+      "type": "interaction",
+      "nextStepId": "check-approval-result",
+      "configuration": {
+        "timeoutMinutes": 2880,
+        "customData": {
+          "taskType": "approval",
+          "priority": "normal",
+          "category": "purchase"
+        }
+      }
+    },
+    {
+      "id": "check-approval-result",
+      "name": "Check Approval Result",
+      "type": "decision",
+      "configuration": {
+        "decisionType": "conditions",
+        "routes": [
+          {
+            "name": "approved",
+            "nextStepId": "check-amount",
+            "condition": "approved == true"
+          },
+          {
+            "name": "rejected",
+            "nextStepId": "notify-rejection"
+          }
+        ],
+        "defaultNextStepId": "notify-rejection"
+      }
+    },
+    {
+      "id": "check-amount",
+      "name": "Check If Executive Approval Needed",
+      "type": "decision",
+      "configuration": {
+        "decisionType": "conditions",
+        "routes": [
+          {
+            "name": "high-value",
+            "nextStepId": "executive-approval",
+            "condition": "amount > 10000"
+          },
+          {
+            "name": "standard",
+            "nextStepId": "process-purchase"
+          }
+        ],
+        "defaultNextStepId": "process-purchase"
+      }
+    },
+    {
+      "id": "executive-approval",
+      "name": "Executive Approval",
+      "type": "interaction",
+      "nextStepId": "process-purchase",
+      "configuration": {
+        "timeoutMinutes": 4320,
+        "customData": {
+          "taskType": "executive-approval",
+          "priority": "high",
+          "escalated": true
+        }
+      }
+    },
+    {
+      "id": "process-purchase",
+      "name": "Process Purchase Order",
+      "type": "business",
+      "nextStepId": "send-confirmation",
+      "configuration": {
+        "serviceName": "PurchaseService",
+        "methodName": "ProcessOrder",
+        "inputMapping": {
+          "requestId": "$requestId"
+        }
+      }
+    },
+    {
+      "id": "send-confirmation",
+      "name": "Send Confirmation Email",
+      "type": "business",
+      "configuration": {
+        "serviceName": "EmailService",
+        "methodName": "SendOrderConfirmation",
+        "inputMapping": {
+          "requestId": "$requestId"
+        }
+      }
+    },
+    {
+      "id": "notify-rejection",
+      "name": "Send Rejection Notification",
+      "type": "business",
+      "configuration": {
+        "serviceName": "EmailService",
+        "methodName": "SendRejectionNotification",
+        "inputMapping": {
+          "requestId": "$requestId"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,171 @@
+{
+  "id": "order-fulfillment-v2",
+  "name": "Order Fulfillment Process",
+  "description": "Modern workflow using simplified syntax with decision steps",
+  "version": "2.0.0",
+  "initialStepId": "receive-order",
+  "variables": {
+    "orderId": "",
+    "customerEmail": "",
+    "orderAmount": 0,
+    "paymentStatus": "pending",
+    "inventoryAvailable": false,
+    "shippingMethod": "",
+    "trackingNumber": ""
+  },
+  "steps": [
+    {
+      "id": "receive-order",
+      "name": "Receive Order",
+      "type": "business",
+      "nextStepId": "check-inventory",
+      "configuration": {
+        "serviceName": "OrderService",
+        "methodName": "ValidateOrder",
+        "inputMapping": {
+          "orderId": "$orderId"
+        },
+        "outputMapping": {
+          "valid": "orderValid"
+        }
+      }
+    },
+    {
+      "id": "check-inventory",
+      "name": "Check Inventory",
+      "type": "decision",
+      "configuration": {
+        "decisionType": "service",
+        "serviceName": "InventoryService",
+        "methodName": "CheckAvailability",
+        "inputMapping": {
+          "orderId": "$orderId"
+        },
+        "routes": [
+          {
+            "name": "available",
+            "nextStepId": "process-payment"
+          },
+          {
+            "name": "unavailable",
+            "nextStepId": "notify-out-of-stock"
+          }
+        ],
+        "defaultNextStepId": "notify-out-of-stock"
+      }
+    },
+    {
+      "id": "process-payment",
+      "name": "Process Payment",
+      "type": "business",
+      "nextStepId": "select-shipping",
+      "configuration": {
+        "serviceName": "PaymentService",
+        "methodName": "ProcessPayment",
+        "inputMapping": {
+          "orderId": "$orderId",
+          "amount": "$orderAmount"
+        },
+        "outputMapping": {
+          "transactionId": "paymentTransactionId",
+          "status": "paymentStatus"
+        },
+        "retryCount": 3,
+        "errorNextStepId": "payment-failed"
+      }
+    },
+    {
+      "id": "select-shipping",
+      "name": "Determine Shipping Method",
+      "type": "decision",
+      "configuration": {
+        "decisionType": "conditions",
+        "routes": [
+          {
+            "name": "express",
+            "nextStepId": "ship-express",
+            "condition": "orderAmount > 100 || shippingMethod == 'express'"
+          },
+          {
+            "name": "standard",
+            "nextStepId": "ship-standard",
+            "condition": "orderAmount <= 100"
+          }
+        ],
+        "defaultNextStepId": "ship-standard"
+      }
+    },
+    {
+      "id": "ship-express",
+      "name": "Express Shipping",
+      "type": "business",
+      "nextStepId": "send-confirmation",
+      "configuration": {
+        "serviceName": "ShippingService",
+        "methodName": "ShipExpress",
+        "inputMapping": {
+          "orderId": "$orderId"
+        },
+        "outputMapping": {
+          "trackingNumber": "trackingNumber"
+        }
+      }
+    },
+    {
+      "id": "ship-standard",
+      "name": "Standard Shipping",
+      "type": "business",
+      "nextStepId": "send-confirmation",
+      "configuration": {
+        "serviceName": "ShippingService",
+        "methodName": "ShipStandard",
+        "inputMapping": {
+          "orderId": "$orderId"
+        },
+        "outputMapping": {
+          "trackingNumber": "trackingNumber"
+        }
+      }
+    },
+    {
+      "id": "send-confirmation",
+      "name": "Send Confirmation Email",
+      "type": "business",
+      "configuration": {
+        "serviceName": "EmailService",
+        "methodName": "SendOrderConfirmation",
+        "inputMapping": {
+          "to": "$customerEmail",
+          "orderId": "$orderId",
+          "trackingNumber": "$trackingNumber"
+        }
+      }
+    },
+    {
+      "id": "notify-out-of-stock",
+      "name": "Notify Customer - Out of Stock",
+      "type": "business",
+      "configuration": {
+        "serviceName": "EmailService",
+        "methodName": "SendOutOfStockNotification",
+        "inputMapping": {
+          "to": "$customerEmail",
+          "orderId": "$orderId"
+        }
+      }
+    },
+    {
+      "id": "payment-failed",
+      "name": "Handle Payment Failure",
+      "type": "business",
+      "configuration": {
+        "serviceName": "EmailService",
+        "methodName": "SendPaymentFailedNotification",
+        "inputMapping": {
+          "to": "$customerEmail",
+          "orderId": "$orderId"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,323 @@
+{
+  "id": "invoice-approval-v1",
+  "name": "Invoice Approval Workflow",
+  "description": "Multi-level approval workflow for invoices with conditional routing",
+  "version": "1.0.0",
+  "initialStepId": "validate-invoice",
+  "variables": {
+    "invoiceNumber": "",
+    "vendorName": "",
+    "amount": 0,
+    "category": "",
+    "submittedBy": "",
+    "level1Approved": false,
+    "level2Approved": false,
+    "requiresLevel2": false,
+    "paymentProcessed": false,
+    "rejectionReason": ""
+  },
+  "steps": [
+    {
+      "id": "validate-invoice",
+      "name": "Validate Invoice Data",
+      "type": "activity",
+      "configuration": {
+        "serviceName": "InvoiceService",
+        "methodName": "ValidateInvoice",
+        "inputMapping": {
+          "invoiceNumber": "$invoiceNumber",
+          "amount": "$amount",
+          "vendorName": "$vendorName"
+        },
+        "outputMapping": {
+          "valid": "invoiceValid",
+          "errors": "validationErrors"
+        },
+        "retryCount": 2,
+        "errorTransitionId": "validation-failed"
+      },
+      "transitions": [
+        {
+          "id": "to-amount-check",
+          "targetStepId": "check-amount",
+          "label": "Validation Passed"
+        }
+      ]
+    },
+    {
+      "id": "check-amount",
+      "name": "Determine Approval Level",
+      "type": "gateway",
+      "configuration": {
+        "gatewayType": "exclusive",
+        "defaultTransitionId": "to-level1"
+      },
+      "transitions": [
+        {
+          "id": "to-level1",
+          "targetStepId": "level1-approval",
+          "condition": "amount <= 5000",
+          "label": "Single Approval Required"
+        },
+        {
+          "id": "to-level1-high",
+          "targetStepId": "level1-approval",
+          "condition": "amount > 5000",
+          "label": "Dual Approval Required"
+        }
+      ]
+    },
+    {
+      "id": "level1-approval",
+      "name": "Level 1 Manager Approval",
+      "type": "interaction",
+      "configuration": {
+        "formSchema": "{\"type\":\"object\",\"properties\":{\"approved\":{\"type\":\"boolean\"},\"comments\":{\"type\":\"string\"}},\"required\":[\"approved\"]}",
+        "assignedRoles": ["Manager"],
+        "timeoutMinutes": 2880,
+        "timeoutTransitionId": "escalate-to-director"
+      },
+      "transitions": [
+        {
+          "id": "to-level1-decision",
+          "targetStepId": "level1-decision",
+          "label": "Level 1 Reviewed"
+        }
+      ]
+    },
+    {
+      "id": "level1-decision",
+      "name": "Process Level 1 Decision",
+      "type": "gateway",
+      "configuration": {
+        "gatewayType": "exclusive",
+        "defaultTransitionId": "to-rejection"
+      },
+      "transitions": [
+        {
+          "id": "to-level2-check",
+          "targetStepId": "check-level2-required",
+          "condition": "level1Approved == true",
+          "label": "Level 1 Approved"
+        },
+        {
+          "id": "to-rejection",
+          "targetStepId": "send-rejection-notification",
+          "condition": "level1Approved == false",
+          "label": "Level 1 Rejected"
+        }
+      ]
+    },
+    {
+      "id": "check-level2-required",
+      "name": "Check if Level 2 Approval Required",
+      "type": "gateway",
+      "configuration": {
+        "gatewayType": "exclusive",
+        "defaultTransitionId": "to-payment"
+      },
+      "transitions": [
+        {
+          "id": "to-level2",
+          "targetStepId": "level2-approval",
+          "condition": "amount > 5000",
+          "label": "Requires Level 2"
+        },
+        {
+          "id": "to-payment",
+          "targetStepId": "process-payment",
+          "condition": "amount <= 5000",
+          "label": "No Level 2 Required"
+        }
+      ]
+    },
+    {
+      "id": "level2-approval",
+      "name": "Level 2 Director Approval",
+      "type": "interaction",
+      "configuration": {
+        "formSchema": "{\"type\":\"object\",\"properties\":{\"approved\":{\"type\":\"boolean\"},\"comments\":{\"type\":\"string\"}},\"required\":[\"approved\"]}",
+        "assignedRoles": ["Director", "VP"],
+        "timeoutMinutes": 4320
+      },
+      "transitions": [
+        {
+          "id": "to-level2-decision",
+          "targetStepId": "level2-decision",
+          "label": "Level 2 Reviewed"
+        }
+      ]
+    },
+    {
+      "id": "level2-decision",
+      "name": "Process Level 2 Decision",
+      "type": "gateway",
+      "configuration": {
+        "gatewayType": "exclusive"
+      },
+      "transitions": [
+        {
+          "id": "to-payment-approved",
+          "targetStepId": "process-payment",
+          "condition": "level2Approved == true",
+          "label": "Level 2 Approved"
+        },
+        {
+          "id": "to-rejection-level2",
+          "targetStepId": "send-rejection-notification",
+          "condition": "level2Approved == false",
+          "label": "Level 2 Rejected"
+        }
+      ]
+    },
+    {
+      "id": "process-payment",
+      "name": "Process Payment",
+      "type": "activity",
+      "configuration": {
+        "serviceName": "PaymentService",
+        "methodName": "ProcessInvoicePayment",
+        "inputMapping": {
+          "invoiceNumber": "$invoiceNumber",
+          "amount": "$amount",
+          "vendorName": "$vendorName"
+        },
+        "outputMapping": {
+          "transactionId": "paymentTransactionId",
+          "success": "paymentProcessed"
+        },
+        "retryCount": 3,
+        "retryDelaySeconds": 300,
+        "errorTransitionId": "payment-failed"
+      },
+      "transitions": [
+        {
+          "id": "to-schedule-payment-date",
+          "targetStepId": "wait-for-payment-date",
+          "label": "Payment Scheduled"
+        }
+      ]
+    },
+    {
+      "id": "wait-for-payment-date",
+      "name": "Wait for Payment Date",
+      "type": "scheduled",
+      "configuration": {
+        "scheduleExpression": "DateTime.UtcNow.AddDays(30)",
+        "skipIfPast": false
+      },
+      "transitions": [
+        {
+          "id": "to-confirm-payment",
+          "targetStepId": "confirm-payment",
+          "label": "Payment Date Reached"
+        }
+      ]
+    },
+    {
+      "id": "confirm-payment",
+      "name": "Confirm Payment Completed",
+      "type": "activity",
+      "configuration": {
+        "serviceName": "PaymentService",
+        "methodName": "ConfirmPayment",
+        "inputMapping": {
+          "transactionId": "$paymentTransactionId"
+        }
+      },
+      "transitions": [
+        {
+          "id": "to-success-notification",
+          "targetStepId": "send-success-notification",
+          "label": "Payment Confirmed"
+        }
+      ]
+    },
+    {
+      "id": "send-success-notification",
+      "name": "Send Approval Notification",
+      "type": "activity",
+      "configuration": {
+        "serviceName": "NotificationService",
+        "methodName": "SendInvoiceApprovedEmail",
+        "inputMapping": {
+          "to": "$submittedBy",
+          "invoiceNumber": "$invoiceNumber",
+          "amount": "$amount",
+          "transactionId": "$paymentTransactionId"
+        }
+      },
+      "transitions": []
+    },
+    {
+      "id": "send-rejection-notification",
+      "name": "Send Rejection Notification",
+      "type": "activity",
+      "configuration": {
+        "serviceName": "NotificationService",
+        "methodName": "SendInvoiceRejectedEmail",
+        "inputMapping": {
+          "to": "$submittedBy",
+          "invoiceNumber": "$invoiceNumber",
+          "reason": "$rejectionReason"
+        }
+      },
+      "transitions": []
+    },
+    {
+      "id": "validation-failed",
+      "name": "Handle Validation Failure",
+      "type": "activity",
+      "configuration": {
+        "serviceName": "NotificationService",
+        "methodName": "SendValidationFailedEmail",
+        "inputMapping": {
+          "to": "$submittedBy",
+          "invoiceNumber": "$invoiceNumber",
+          "errors": "$validationErrors"
+        }
+      },
+      "transitions": []
+    },
+    {
+      "id": "payment-failed",
+      "name": "Handle Payment Failure",
+      "type": "interaction",
+      "configuration": {
+        "formSchema": "{\"type\":\"object\",\"properties\":{\"action\":{\"type\":\"string\",\"enum\":[\"retry\",\"cancel\"]}}}",
+        "assignedRoles": ["Finance", "Accounting"]
+      },
+      "transitions": [
+        {
+          "id": "retry-payment",
+          "targetStepId": "process-payment",
+          "condition": "action == 'retry'",
+          "label": "Retry Payment"
+        },
+        {
+          "id": "cancel-payment",
+          "targetStepId": "send-rejection-notification",
+          "condition": "action == 'cancel'",
+          "label": "Cancel Invoice"
+        }
+      ]
+    },
+    {
+      "id": "escalate-to-director",
+      "name": "Escalate to Director",
+      "type": "interaction",
+      "configuration": {
+        "formSchema": "{\"type\":\"object\",\"properties\":{\"approved\":{\"type\":\"boolean\"},\"comments\":{\"type\":\"string\"}}}",
+        "assignedRoles": ["Director"],
+        "timeoutMinutes": 1440
+      },
+      "transitions": [
+        {
+          "id": "to-escalation-decision",
+          "targetStepId": "level1-decision",
+          "label": "Escalation Reviewed"
+        }
+      ]
+    }
+  ]
+}

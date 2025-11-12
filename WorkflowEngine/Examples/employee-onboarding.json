@@ -1,0 +1,190 @@
+{
+  "id": "employee-onboarding-v1",
+  "name": "Employee Onboarding Process",
+  "description": "Complete workflow for onboarding new employees",
+  "version": "1.0.0",
+  "initialStepId": "welcome-step",
+  "variables": {
+    "employeeName": "",
+    "employeeEmail": "",
+    "department": "",
+    "startDate": "",
+    "approvalStatus": "pending",
+    "equipmentOrdered": false
+  },
+  "steps": [
+    {
+      "id": "welcome-step",
+      "name": "Welcome New Employee",
+      "type": "interaction",
+      "configuration": {
+        "formSchema": "{\"type\":\"object\",\"properties\":{\"employeeName\":{\"type\":\"string\"},\"employeeEmail\":{\"type\":\"string\"},\"department\":{\"type\":\"string\"},\"startDate\":{\"type\":\"string\",\"format\":\"date\"}}}",
+        "assignedRoles": ["HR"],
+        "allowReassignment": true,
+        "timeoutMinutes": 1440
+      },
+      "transitions": [
+        {
+          "id": "to-manager-approval",
+          "targetStepId": "manager-approval",
+          "label": "Submit for Approval"
+        }
+      ]
+    },
+    {
+      "id": "manager-approval",
+      "name": "Manager Approval",
+      "type": "interaction",
+      "configuration": {
+        "formSchema": "{\"type\":\"object\",\"properties\":{\"approved\":{\"type\":\"boolean\"},\"comments\":{\"type\":\"string\"}}}",
+        "assignedRoles": ["Manager"],
+        "timeoutMinutes": 2880
+      },
+      "transitions": [
+        {
+          "id": "to-approval-decision",
+          "targetStepId": "approval-decision",
+          "label": "Review Complete"
+        }
+      ]
+    },
+    {
+      "id": "approval-decision",
+      "name": "Check Approval Status",
+      "type": "gateway",
+      "configuration": {
+        "gatewayType": "exclusive",
+        "defaultTransitionId": "to-rejection"
+      },
+      "transitions": [
+        {
+          "id": "to-equipment-order",
+          "targetStepId": "order-equipment",
+          "condition": "approved == true",
+          "label": "Approved"
+        },
+        {
+          "id": "to-rejection",
+          "targetStepId": "send-rejection",
+          "condition": "approved == false",
+          "label": "Rejected"
+        }
+      ]
+    },
+    {
+      "id": "order-equipment",
+      "name": "Order Employee Equipment",
+      "type": "activity",
+      "configuration": {
+        "serviceName": "EquipmentService",
+        "methodName": "OrderStandardPackage",
+        "inputMapping": {
+          "employeeName": "$employeeName",
+          "department": "$department",
+          "email": "$employeeEmail"
+        },
+        "outputMapping": {
+          "orderId": "equipmentOrderId",
+          "success": "equipmentOrdered"
+        },
+        "retryCount": 3,
+        "retryDelaySeconds": 60
+      },
+      "transitions": [
+        {
+          "id": "to-it-setup",
+          "targetStepId": "it-account-setup",
+          "label": "Equipment Ordered"
+        }
+      ]
+    },
+    {
+      "id": "it-account-setup",
+      "name": "IT Account Setup",
+      "type": "activity",
+      "configuration": {
+        "serviceName": "ITService",
+        "methodName": "CreateUserAccount",
+        "inputMapping": {
+          "employeeName": "$employeeName",
+          "email": "$employeeEmail",
+          "department": "$department"
+        },
+        "outputMapping": {
+          "username": "employeeUsername",
+          "success": "accountCreated"
+        },
+        "retryCount": 2
+      },
+      "transitions": [
+        {
+          "id": "to-wait-for-start-date",
+          "targetStepId": "wait-for-start-date",
+          "label": "Account Created"
+        }
+      ]
+    },
+    {
+      "id": "wait-for-start-date",
+      "name": "Wait Until Start Date",
+      "type": "scheduled",
+      "configuration": {
+        "dateVariable": "startDate",
+        "skipIfPast": false
+      },
+      "transitions": [
+        {
+          "id": "to-send-welcome-email",
+          "targetStepId": "send-welcome-email",
+          "label": "Start Date Reached"
+        }
+      ]
+    },
+    {
+      "id": "send-welcome-email",
+      "name": "Send Welcome Email",
+      "type": "activity",
+      "configuration": {
+        "serviceName": "EmailService",
+        "methodName": "SendWelcomeEmail",
+        "inputMapping": {
+          "to": "$employeeEmail",
+          "name": "$employeeName",
+          "username": "$employeeUsername"
+        }
+      },
+      "transitions": [
+        {
+          "id": "to-first-day-checklist",
+          "targetStepId": "first-day-checklist",
+          "label": "Email Sent"
+        }
+      ]
+    },
+    {
+      "id": "first-day-checklist",
+      "name": "First Day Checklist",
+      "type": "interaction",
+      "configuration": {
+        "formSchema": "{\"type\":\"object\",\"properties\":{\"receivedEquipment\":{\"type\":\"boolean\"},\"metTeam\":{\"type\":\"boolean\"},\"completedOrientation\":{\"type\":\"boolean\"}}}",
+        "assignedRoles": ["HR", "Manager"]
+      },
+      "transitions": []
+    },
+    {
+      "id": "send-rejection",
+      "name": "Send Rejection Notification",
+      "type": "activity",
+      "configuration": {
+        "serviceName": "EmailService",
+        "methodName": "SendRejectionEmail",
+        "inputMapping": {
+          "to": "$employeeEmail",
+          "name": "$employeeName",
+          "reason": "$comments"
+        }
+      },
+      "transitions": []
+    }
+  ]
+}
